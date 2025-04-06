@@ -11,6 +11,8 @@ import {
     Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+// Import the new carousel component
+import { PoemCarousel } from "../components/PoemCarousel";
 
 // Define a type for the poem data
 interface Poem {
@@ -85,16 +87,27 @@ export default function Home() {
             // Handle error appropriately (e.g., show a message to the user)
         }
 
-        // Reset form was moved inside the try block for better flow
-        // setTopic('');
-        // setLines([]);
+        // Reset form
+        setTopic("");
+        setLines([]);
     };
 
     return (
-        <main className="flex min-h-screen flex-col items-center p-8 sm:p-16 md:p-24 bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
-            <h1 className="text-4xl font-bold mb-12 text-gray-800">
-                삼행시 광장
+        <main className="flex min-h-screen flex-col items-center p-8 sm:p-16 md:p-24 gradient-bg">
+            {/* Updated title: Emphasize first letter of each concept */}
+            <h1 className="mb-12 flex items-baseline flex-wrap justify-center text-center space-x-1 font-cookierun">
+                <span className="title-emphasis">삼</span>
+                <span className="title-normal">행시로</span>
+                <span className="title-emphasis ml-3">행</span>
+                <span className="title-normal">복한</span>
+                <span className="title-emphasis ml-3">시</span>
+                <span className="title-normal">간</span>
             </h1>
+
+            {/* === Add the Poem Carousel here === */}
+            <div className="w-full max-w-lg">
+                <PoemCarousel poems={poems} />
+            </div>
 
             {/* 삼행시 입력 폼 - Add background, more padding, smoother shadow */}
             <section className="w-full max-w-lg mb-12 p-8 bg-white border border-gray-200 rounded-xl shadow-lg">
@@ -116,7 +129,7 @@ export default function Home() {
                             onChange={handleTopicChange}
                             maxLength={6}
                             required
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 ease-in-out"
+                            className="input-field"
                             placeholder="예: 여행"
                         />
                     </div>
@@ -126,7 +139,7 @@ export default function Home() {
                                 htmlFor={`line-${index}`}
                                 className="block text-sm font-medium text-gray-700 mb-1.5"
                             >
-                                <span className="font-bold text-indigo-600 text-lg mr-1">
+                                <span className="font-bold text-orange-600 text-lg mr-1">
                                     {topic[index] || "_"}
                                 </span>
                                 {index + 1}번째 줄
@@ -139,7 +152,7 @@ export default function Home() {
                                     handleLineChange(index, e.target.value)
                                 }
                                 required
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 ease-in-out"
+                                className="input-field"
                                 placeholder={`${index + 1}번째 줄을 입력하세요`}
                             />
                         </div>
@@ -147,7 +160,7 @@ export default function Home() {
 
                     <button
                         type="submit"
-                        className="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="btn-primary w-full focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-60 disabled:cursor-not-allowed"
                         disabled={
                             !topic ||
                             topic.length === 0 ||
@@ -159,46 +172,6 @@ export default function Home() {
                         등록하기
                     </button>
                 </form>
-            </section>
-
-            {/* 삼행시 목록 */}
-            <section className="w-full max-w-lg mt-8">
-                <h2 className="text-3xl font-semibold mb-6 text-gray-700">
-                    올라온 삼행시
-                </h2>
-                {/* 삼행시 목록 렌더링 */}
-                <div className="space-y-6">
-                    {poems.length === 0 ? (
-                        <p className="text-gray-500 text-center">
-                            아직 등록된 삼행시가 없습니다.
-                        </p>
-                    ) : (
-                        poems.map((poem) => (
-                            <div
-                                key={poem.id}
-                                className="p-6 bg-white border border-gray-200 rounded-lg shadow-md"
-                            >
-                                <h3 className="text-xl font-semibold mb-3 text-indigo-700">
-                                    주제어: {poem.topic}
-                                </h3>
-                                <div className="space-y-1 text-gray-800">
-                                    {poem.lines.map((line, index) => (
-                                        <p key={index}>
-                                            <span className="font-semibold text-indigo-500 mr-2">
-                                                {poem.topic[index]}:
-                                            </span>
-                                            {line}
-                                        </p>
-                                    ))}
-                                </div>
-                                {/* Optional: Display timestamp */}
-                                {/* <p className="text-xs text-gray-400 mt-3 text-right">
-                                    {poem.createdAt?.toDate().toLocaleString() ?? '시간 정보 없음'}
-                                </p> */}
-                            </div>
-                        ))
-                    )}
-                </div>
             </section>
         </main>
     );
