@@ -9,10 +9,12 @@ import {
     orderBy,
     onSnapshot,
     Timestamp,
+    getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 // Import the new carousel component
 import { PoemCarousel } from "../components/PoemCarousel";
+import Link from "next/link";
 
 // Define a type for the poem data
 interface Poem {
@@ -22,11 +24,22 @@ interface Poem {
     createdAt: Timestamp; // Use Firestore Timestamp type
 }
 
+// 주제어 타입 정의
+interface Topic {
+    id: string;
+    word: string;
+    category: string;
+}
+
 export default function Home() {
     const [topic, setTopic] = useState("");
     const [lines, setLines] = useState<string[]>([]);
     // State to hold the list of poems
     const [poems, setPoems] = useState<Poem[]>([]);
+    const [lineErrors, setLineErrors] = useState<string[]>([]);
+    // 주제어 목록 상태
+    const [topics, setTopics] = useState<Topic[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Fetch poems from Firestore on component mount
     useEffect(() => {
@@ -46,26 +59,119 @@ export default function Home() {
             setPoems(poemsData);
         });
 
+        // 주제어 목록 가져오기
+        fetchTopics();
+
         // Cleanup subscription on unmount
         return () => unsubscribe();
     }, []); // Empty dependency array ensures this runs only once on mount
 
-    const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newTopic = e.target.value.trim();
-        if (newTopic.length <= 6) {
-            setTopic(newTopic);
-            setLines(Array(newTopic.length).fill(""));
+    // 주제어 목록 가져오기 함수
+    const fetchTopics = async () => {
+        try {
+            const topicsSnapshot = await getDocs(collection(db, "topics"));
+            const topicsData: Topic[] = [];
+            topicsSnapshot.forEach((doc) => {
+                const data = doc.data();
+                topicsData.push({
+                    id: doc.id,
+                    word: data.word,
+                    category: data.category || "기본",
+                });
+            });
+            setTopics(topicsData);
+
+            // 주제어 로드 후 자동으로 오늘의 주제어 설정
+            if (topicsData.length > 0) {
+                setTodaysRandomTopic(topicsData);
+            }
+        } catch (error) {
+            console.error("주제어 가져오기 오류:", error);
         }
+    };
+
+    // 오늘 날짜 기반 랜덤 주제어 설정 함수
+    const setTodaysRandomTopic = (availableTopics: Topic[]) => {
+        // 봄 카테고리 주제어만 필터링
+        const springTopics = availableTopics.filter(
+            (topic) => topic.category === "봄"
+        );
+
+        if (springTopics.length === 0) {
+            console.error("봄 관련 주제어가 없습니다.");
+            return;
+        }
+
+        // 오늘 날짜를 시드로 사용
+        const today = new Date();
+        const dateString = `${today.getFullYear()}${today.getMonth()}${today.getDate()}`;
+        const seed = parseInt(dateString);
+
+        // 시드 기반 랜덤 인덱스 생성 (단순한 방식의 시드 기반 랜덤)
+        const randomIndex = seed % springTopics.length;
+        const selectedTopic = springTopics[randomIndex].word;
+
+        setTopic(selectedTopic);
+        setLines(Array(selectedTopic.length).fill(""));
+        setLineErrors(Array(selectedTopic.length).fill(""));
+    };
+
+    // 랜덤 주제어 선택 함수
+    const selectRandomTopic = () => {
+        setIsLoading(true);
+        if (topics.length === 0) {
+            alert("사용 가능한 주제어가 없습니다.");
+            setIsLoading(false);
+            return;
+        }
+
+        // 봄 카테고리 주제어만 필터링
+        const springTopics = topics.filter((topic) => topic.category === "봄");
+
+        if (springTopics.length === 0) {
+            alert("봄 관련 주제어가 없습니다.");
+            setIsLoading(false);
+            return;
+        }
+
+        const randomIndex = Math.floor(Math.random() * springTopics.length);
+        const selectedTopic = springTopics[randomIndex].word;
+        setTopic(selectedTopic);
+        setLines(Array(selectedTopic.length).fill(""));
+        setLineErrors(Array(selectedTopic.length).fill(""));
+        setIsLoading(false);
     };
 
     const handleLineChange = (index: number, value: string) => {
         const newLines = [...lines];
         newLines[index] = value;
         setLines(newLines);
+
+        // 첫 글자 일치 여부 확인
+        const newErrors = [...lineErrors];
+        if (value.length > 0) {
+            const firstChar = value.trim().charAt(0);
+            const topicChar = topic[index];
+
+            if (firstChar !== topicChar) {
+                newErrors[index] = `첫 글자는 '${topicChar}'이어야 합니다`;
+            } else {
+                newErrors[index] = "";
+            }
+        } else {
+            newErrors[index] = "";
+        }
+        setLineErrors(newErrors);
     };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault(); // Prevent default form submission
+
+        // 모든 줄이 첫 글자 검증을 통과했는지 확인
+        if (lineErrors.some((error) => error !== "")) {
+            alert("각 줄의 첫 글자가 주제어의 해당 글자와 일치해야 합니다.");
+            return;
+        }
 
         // Prepare data to be saved
         const poemData = {
@@ -93,86 +199,162 @@ export default function Home() {
     };
 
     return (
-        <main className="flex min-h-screen flex-col items-center p-8 sm:p-16 md:p-24 gradient-bg">
-            {/* Updated title: Emphasize first letter of each concept */}
-            <h1 className="mb-12 flex items-baseline flex-wrap justify-center text-center space-x-1 font-cookierun">
-                <span className="title-emphasis">삼</span>
-                <span className="title-normal">행시로</span>
-                <span className="title-emphasis ml-3">행</span>
-                <span className="title-normal">복한</span>
-                <span className="title-emphasis ml-3">시</span>
-                <span className="title-normal">간</span>
-            </h1>
+        <main className="flex min-h-screen flex-col items-center py-6 sm:py-8 gradient-bg">
+            <div className="w-full max-w-[1280px] mx-auto px-3 sm:px-4 md:px-6">
+                {/* Updated title: Emphasize first letter of each concept */}
+                <h1 className="mb-6 sm:mb-8 flex items-baseline flex-wrap justify-center text-center space-x-1 font-cookierun">
+                    <span className="title-emphasis text-4xl sm:text-5xl">
+                        삼
+                    </span>
+                    <span className="title-normal text-xl sm:text-2xl">
+                        행시로
+                    </span>
+                    <span className="title-emphasis text-4xl sm:text-5xl ml-2">
+                        행
+                    </span>
+                    <span className="title-normal text-xl sm:text-2xl">
+                        복한
+                    </span>
+                    <span className="title-emphasis text-4xl sm:text-5xl ml-2">
+                        시
+                    </span>
+                    <span className="title-normal text-xl sm:text-2xl">간</span>
+                </h1>
 
-            {/* === Add the Poem Carousel here === */}
-            <div className="w-full max-w-lg">
-                <PoemCarousel poems={poems} />
-            </div>
+                {/* === Add the Poem Carousel here === */}
+                <div className="w-full overflow-hidden mb-6">
+                    <PoemCarousel poems={poems} />
+                </div>
 
-            {/* 삼행시 입력 폼 - Add background, more padding, smoother shadow */}
-            <section className="w-full max-w-lg mb-12 p-8 bg-white border border-gray-200 rounded-xl shadow-lg">
-                <h2 className="text-3xl font-semibold mb-6 text-center text-gray-700">
-                    새 삼행시 짓기
-                </h2>
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label
-                            htmlFor="topic"
-                            className="block text-sm font-medium text-gray-700 mb-1.5"
-                        >
-                            주제어 (최대 6글자)
-                        </label>
-                        <input
-                            type="text"
-                            id="topic"
-                            value={topic}
-                            onChange={handleTopicChange}
-                            maxLength={6}
-                            required
-                            className="input-field"
-                            placeholder="예: 여행"
-                        />
-                    </div>
-                    {lines.map((line, index) => (
-                        <div key={index}>
-                            <label
-                                htmlFor={`line-${index}`}
-                                className="block text-sm font-medium text-gray-700 mb-1.5"
-                            >
-                                <span className="font-bold text-orange-600 text-lg mr-1">
-                                    {topic[index] || "_"}
-                                </span>
-                                {index + 1}번째 줄
-                            </label>
-                            <input
-                                type="text"
-                                id={`line-${index}`}
-                                value={line}
-                                onChange={(e) =>
-                                    handleLineChange(index, e.target.value)
+                {/* 삼행시 입력 폼 - Add background, more padding, smoother shadow */}
+                <div className="flex justify-center w-full">
+                    <section className="w-full max-w-[500px] mb-6 p-5 bg-white border border-orange-200 rounded-xl shadow-lg">
+                        <h2 className="text-lg sm:text-xl font-semibold mb-4 text-center text-orange-600">
+                            오늘의 주제
+                        </h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label
+                                    htmlFor="topic"
+                                    className="block text-sm font-medium text-orange-500 mb-2 text-center"
+                                >
+                                    {topic ? (
+                                        <div className="flex items-center justify-center space-x-2 py-1 px-3 bg-orange-50 rounded-lg inline-block">
+                                            {topic.split("").map((char, i) => (
+                                                <span
+                                                    key={i}
+                                                    className="font-bold text-orange-600 text-xl"
+                                                >
+                                                    {char}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        "오늘의 주제어"
+                                    )}
+                                </label>
+                                <div className="mt-2 text-center mb-4">
+                                    <button
+                                        type="button"
+                                        onClick={selectRandomTopic}
+                                        className="btn-primary px-3 py-2 border-none outline-none"
+                                        disabled={isLoading}
+                                    >
+                                        {isLoading
+                                            ? "로딩 중..."
+                                            : "다른 주제 고르기"}
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {lines.map((line, index) => (
+                                        <div
+                                            key={index}
+                                            className="flex flex-col"
+                                        >
+                                            <div className="flex items-center">
+                                                <div className="w-9 h-9 bg-orange-50 border border-orange-200 rounded-md flex items-center justify-center mr-3">
+                                                    <span className="font-bold text-orange-600 text-lg">
+                                                        {topic[index] || "_"}
+                                                    </span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <input
+                                                        type="text"
+                                                        id={`line-${index}`}
+                                                        value={line}
+                                                        onChange={(e) =>
+                                                            handleLineChange(
+                                                                index,
+                                                                e.target.value
+                                                            )
+                                                        }
+                                                        required
+                                                        className={`input-field w-full outline-none focus:outline-none appearance-none py-2 ${
+                                                            lineErrors[index]
+                                                                ? "border-red-500"
+                                                                : "border-orange-200"
+                                                        }`}
+                                                        style={{
+                                                            outline: "none",
+                                                            boxShadow:
+                                                                "none !important",
+                                                            WebkitAppearance:
+                                                                "none",
+                                                            MozAppearance:
+                                                                "none",
+                                                            appearance: "none",
+                                                            border: lineErrors[
+                                                                index
+                                                            ]
+                                                                ? "1px solid rgb(239, 68, 68)"
+                                                                : "1px solid rgb(254, 215, 170)",
+                                                        }}
+                                                        placeholder="입력하세요"
+                                                    />
+                                                </div>
+                                            </div>
+                                            {lineErrors[index] && (
+                                                <div className="pl-[52px] mt-1">
+                                                    <p className="text-red-500 text-xs">
+                                                        {lineErrors[index]}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="btn-primary px-3 py-2 border-none outline-none w-full disabled:opacity-60 disabled:cursor-not-allowed mt-4"
+                                disabled={
+                                    !topic ||
+                                    topic.length === 0 ||
+                                    topic.length > 6 ||
+                                    lines.length !== topic.length ||
+                                    lines.some((l) => l.trim() === "") ||
+                                    lineErrors.some((error) => error !== "")
                                 }
-                                required
-                                className="input-field"
-                                placeholder={`${index + 1}번째 줄을 입력하세요`}
-                            />
-                        </div>
-                    ))}
+                            >
+                                등록하기
+                            </button>
+                        </form>
+                    </section>
+                </div>
 
-                    <button
-                        type="submit"
-                        className="btn-primary w-full focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-60 disabled:cursor-not-allowed"
-                        disabled={
-                            !topic ||
-                            topic.length === 0 ||
-                            topic.length > 6 ||
-                            lines.length !== topic.length ||
-                            lines.some((l) => l.trim() === "")
-                        }
+                {/* 관리자 페이지 링크 */}
+                <div className="w-full text-center mt-6 mb-4 text-xs text-gray-500">
+                    <Link
+                        href="/admin"
+                        className="text-gray-500 hover:text-orange-500 no-underline"
+                        style={{ textDecoration: "none" }}
                     >
-                        등록하기
-                    </button>
-                </form>
-            </section>
+                        관리자 페이지
+                    </Link>
+                </div>
+            </div>
         </main>
     );
 }

@@ -16,7 +16,9 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" className={`${inter.variable}`}>
-            <body className="font-cookierun">{children}</body>
+            <body className="font-cookierun gradient-bg flex justify-center align-center">
+                {children}
+            </body>
         </html>
     );
 }
